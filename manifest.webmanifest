@@ -1,0 +1,27 @@
+{
+  "name": "NEON DRIFT — неоновый раннер",
+  "short_name": "NEON DRIFT",
+  "description": "Неоновый бесконечный раннер для телефона: веди корабль пальцем, собирай энергию, уходи в Овердрайв.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "portrait",
+  "background_color": "#05030f",
+  "theme_color": "#05030f",
+  "lang": "ru",
+  "dir": "ltr",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Играть",
+      "short_name": "Играть",
+      "url": "./?play=1"
+    }
+  ]
+}
