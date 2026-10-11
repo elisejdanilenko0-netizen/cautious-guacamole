@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<title>NEON TETRA — неоновый тетрис</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#05030f" />
+<style>
+  :root{
+    --bg:#05030f; --cyan:#35e6ff; --magenta:#ff2fd0; --violet:#8a5cff;
+    --yellow:#ffe14d; --dim:#7c8aa8; --text:#e9f6ff;
+    --pad-t: max(10px, env(safe-area-inset-top));
+    --pad-b: max(10px, env(safe-area-inset-bottom));
+    --font:"Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; width:100%; height:100%; overflow:hidden;
+    background:var(--bg); color:var(--text); font-family:var(--font);
+    overscroll-behavior:none; touch-action:none; user-select:none; -webkit-user-select:none; }
+  #app{ position:fixed; inset:0; display:flex; flex-direction:column;
+    background:radial-gradient(120% 70% at 50% 0%, #170a35 0%, #090519 45%, #04020c 100%); }
+  #wrap{ position:relative; flex:1; min-height:0; }
+  canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+
+  .screen{ position:absolute; inset:0; z-index:5; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:14px; padding:20px; text-align:center;
+    background:radial-gradient(90% 60% at 50% 45%, rgba(10,5,32,.78), rgba(5,3,15,.95));
+    -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px); animation:fade .25s ease-out; }
+  @keyframes fade{ from{opacity:0} to{opacity:1} }
+  .hidden{ display:none !important; }
+
+  .logo{ display:flex; flex-direction:column; line-height:.88; }
+  .logo span{ font-weight:900; letter-spacing:.05em; font-size:clamp(38px,13vw,72px); }
+  .logo-1{ color:#fff; text-shadow:0 0 18px rgba(53,230,255,.9),0 0 52px rgba(53,230,255,.4); }
+  .logo-2{ color:var(--magenta); text-shadow:0 0 18px rgba(255,47,208,.9),0 0 56px rgba(255,47,208,.4); }
+  .tagline{ color:var(--dim); font-size:13px; margin:2px 0 4px; }
+
+  .big-btn{ font-family:var(--font); font-size:18px; font-weight:800; letter-spacing:.14em;
+    padding:16px 46px; border-radius:99px; border:none; color:#04121a;
+    background:linear-gradient(135deg,#b6ffe9,var(--cyan) 50%,var(--magenta));
+    box-shadow:0 0 24px rgba(53,230,255,.6),0 0 60px rgba(255,47,208,.3); transition:transform .12s; }
+  .big-btn:active{ transform:scale(.95); }
+  .ghost-btn{ font-family:var(--font); font-size:12px; font-weight:700; letter-spacing:.12em;
+    padding:9px 22px; border-radius:99px; color:var(--dim); background:transparent;
+    border:1px solid rgba(255,255,255,.16); }
+
+  .keys{ display:grid; grid-template-columns:auto auto; gap:4px 14px; font-size:12px; color:var(--dim); }
+  .keys b{ color:var(--cyan); font-weight:700; }
+  .best-line{ color:var(--dim); font-size:12px; letter-spacing:.1em; margin:8px 0 0; }
+  .best-line b{ color:#fff; font-size:15px; }
+
+  .over-title{ font-size:clamp(28px,10vw,48px); font-weight:900; letter-spacing:.1em; color:#fff;
+    text-shadow:0 0 20px rgba(255,59,92,.7); }
+  .over-score{ font-size:clamp(50px,20vw,96px); font-weight:900; line-height:1; color:#fff;
+    text-shadow:0 0 26px rgba(53,230,255,.8),0 0 70px rgba(138,92,255,.45); }
+  .over-meta{ display:flex; gap:20px; flex-wrap:wrap; justify-content:center; }
+  .over-meta div{ font-size:14px; color:#fff; }
+  .over-meta .label{ display:block; font-size:10px; letter-spacing:.18em; color:var(--dim); margin-bottom:2px; }
+  .record{ font-weight:900; letter-spacing:.16em; font-size:13px; color:#2b1600;
+    background:linear-gradient(90deg,#ffe14d,#ff9f1c); padding:6px 16px; border-radius:99px;
+    box-shadow:0 0 24px rgba(255,200,60,.6); animation:pop .5s cubic-bezier(.2,1.6,.4,1); }
+  @keyframes pop{ from{transform:scale(.4);opacity:0} to{transform:scale(1);opacity:1} }
+
+  /* сенсорные кнопки */
+  #pad{ display:none; z-index:4; padding:6px 8px var(--pad-b); gap:8px; }
+  #pad.on{ display:grid; grid-template-columns:repeat(5,1fr); }
+  .pb{ font-family:var(--font); font-size:19px; font-weight:800; color:#dff6ff; height:56px;
+    border-radius:14px; border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.07); }
+  .pb:active{ background:rgba(53,230,255,.28); transform:scale(.96); }
+  .pb.wide{ font-size:13px; letter-spacing:.08em; }
+
+  #top{ position:absolute; z-index:6; top:var(--pad-t); right:10px; display:flex; gap:8px; }
+  .mini{ width:36px; height:36px; border-radius:50%; font-size:15px; color:#fff; opacity:.6;
+    background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.14); }
+  .mini.off{ opacity:.28; filter:grayscale(1); }
+  .mini:active{ transform:scale(.9); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="wrap">
+    <canvas id="cv"></canvas>
+
+    <div id="top">
+      <button id="pause" class="mini" type="button" title="Пауза">❚❚</button>
+      <button id="sound" class="mini" type="button" title="Звук">🔊</button>
+    </div>
+
+    <div id="menu" class="screen">
+      <div class="logo"><span class="logo-1">NEON</span><span class="logo-2">TETRA</span></div>
+      <p class="tagline">Собери 4 ряда за раз — получи Тетрис ×800</p>
+      <button id="play" class="big-btn" type="button">ИГРАТЬ</button>
+      <div class="keys">
+        <b>← →</b><span>двигать</span>
+        <b>↓</b><span>мягкий сброс</span>
+        <b>Пробел</b><span>резкий сброс</span>
+        <b>↑ / Z</b><span>поворот</span>
+        <b>C</b><span>отложить фигуру</span>
+        <b>P</b><span>пауза</span>
+      </div>
+      <p class="best-line">Лучший счёт: <b id="best-menu">0</b></p>
+    </div>
+
+    <div id="over" class="screen hidden">
+      <div id="record" class="record hidden">НОВЫЙ РЕКОРД</div>
+      <div class="over-title">КОНЕЦ</div>
+      <div class="over-score"><span id="final">0</span></div>
+      <div class="over-meta">
+        <div><span class="label">ЛУЧШИЙ</span><b id="best-over">0</b></div>
+        <div><span class="label">ЛИНИИ</span><b id="lines">0</b></div>
+        <div><span class="label">УРОВЕНЬ</span><b id="lvl">1</b></div>
+        <div><span class="label">ТЕТРИСЫ</span><b id="tetris">0</b></div>
+      </div>
+      <button id="retry" class="big-btn" type="button">ЕЩЁ РАЗ</button>
+      <button id="home" class="ghost-btn" type="button">В МЕНЮ</button>
+    </div>
+
+    <div id="pauseScreen" class="screen hidden">
+      <div class="over-title">ПАУЗА</div>
+      <p class="tagline">Тапни, чтобы продолжить</p>
+      <button id="resume" class="big-btn" type="button">ПРОДОЛЖИТЬ</button>
+    </div>
+  </div>
+
+  <div id="pad">
+    <button class="pb" data-act="left"  type="button">◀</button>
+    <button class="pb" data-act="rot"   type="button">↻</button>
+    <button class="pb" data-act="down"  type="button">▼</button>
+    <button class="pb" data-act="drop"  type="button">⤓</button>
+    <button class="pb" data-act="right" type="button">▶</button>
+    <button class="pb wide" data-act="ccw"  type="button">↺</button>
+    <button class="pb wide" data-act="hold" type="button">ОТЛОЖИТЬ</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   NEON TETRA — всё в одном файле, без зависимостей и сборки.
+   Работает и по file://, и в песочнице: ни одного внешнего запроса.
+   ============================================================ */
+(function () {
+'use strict';
+
+/* localStorage на file:// может бросать исключение — оборачиваем */
+var store = {
+  get: function (k, d) { try { var v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
+  set: function (k, v) { try { localStorage.setItem(k, String(v)); } catch (e) {} }
+};
+
+var $ = function (id) { return document.getElementById(id); };
+var cv = $('cv');
+var ctx = cv.getContext('2d');
+
+/* ---------------------------------------------------------- фигуры */
+var COLORS = ['#35e6ff', '#4d7cff', '#ff9f1c', '#ffe14d', '#4dffb0', '#ff2fd0', '#ff3b5c'];
+var DEF = {
+  I: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
+  J: [[1,0,0],[1,1,1],[0,0,0]],
+  L: [[0,0,1],[1,1,1],[0,0,0]],
+  O: [[1,1],[1,1]],
+  S: [[0,1,1],[1,1,0],[0,0,0]],
+  T: [[0,1,0],[1,1,1],[0,0,0]],
+  Z: [[1,1,0],[0,1,1],[0,0,0]]
+};
+var TYPES = ['I','J','L','O','S','T','Z'];
+var COLOR_OF = { I:0, J:1, L:2, O:3, S:4, T:5, Z:6 };
+
+function rotCW(m) {
+  var n = m.length, r = [], y, x;
+  for (y = 0; y < n; y++) { r.push([]); for (x = 0; x < n; x++) r[y].push(m[n - 1 - x][y]); }
+  return r;
+}
+/* для каждой фигуры — 4 поворота, каждый списком клеток [x,y] */
+var SHAPES = {};
+(function () {
+  for (var i = 0; i < TYPES.length; i++) {
+    var t = TYPES[i], m = DEF[t], states = [];
+    for (var r = 0; r < 4; r++) {
+      var cells = [], y, x;
+      for (y = 0; y < m.length; y++) for (x = 0; x < m.length; x++) if (m[y][x]) cells.push([x, y]);
+      states.push(cells);
+      m = rotCW(m);
+    }
+    SHAPES[t] = states;
+  }
+})();
+
+/* таблицы «отскоков от стенок» (SRS); ось Y на экране направлена вниз,
+   поэтому смещения по y инвертированы относительно стандарта */
+var KICK = {
+  JLSTZ: {
+    '01': [[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],
+    '10': [[0,0],[1,0],[1,1],[0,-2],[1,-2]],
+    '12': [[0,0],[1,0],[1,1],[0,-2],[1,-2]],
+    '21': [[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],
+    '23': [[0,0],[1,0],[1,-1],[0,2],[1,2]],
+    '32': [[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],
+    '30': [[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],
+    '03': [[0,0],[1,0],[1,-1],[0,2],[1,2]]
+  },
+  I: {
+    '01': [[0,0],[-2,0],[1,0],[-2,1],[1,-2]],
+    '10': [[0,0],[2,0],[-1,0],[2,-1],[-1,2]],
+    '12': [[0,0],[-1,0],[2,0],[-1,-2],[2,1]],
+    '21': [[0,0],[1,0],[-2,0],[1,2],[-2,-1]],
+    '23': [[0,0],[2,0],[-1,0],[2,-1],[-1,2]],
+    '32': [[0,0],[-2,0],[1,0],[-2,1],[1,-2]],
+    '30': [[0,0],[1,0],[-2,0],[1,2],[-2,-1]],
+    '03': [[0,0],[-1,0],[2,0],[-1,-2],[2,1]]
+  }
+};
+
+/* ---------------------------------------------------------- звук */
+var SFX = {
+  ctx: null, on: store.get('tetra.sound', '1') !== '0', master: null, noise: null,
+  init: function () {
+    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    this.ctx = new AC();
+    this.master = this.ctx.createGain();
+    this.master.gain.value = this.on ? 0.7 : 0;
+    this.master.connect(this.ctx.destination);
+    var len = Math.floor(this.ctx.sampleRate * 0.5);
+    var buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    this.noise = buf;
+  },
+  set: function (on) {
+    this.on = on; store.set('tetra.sound', on ? '1' : '0');
+    if (this.master) this.master.gain.setTargetAtTime(on ? 0.7 : 0, this.ctx.currentTime, 0.05);
+  },
+  tone: function (type, f0, f1, dur, vol) {
+    if (!this.ctx || !this.on) return;
+    var t = this.ctx.currentTime, o = this.ctx.createOscillator(), g = this.ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t);
+    if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + dur + 0.05);
+  },
+  hit: function (dur, vol, freq) {
+    if (!this.ctx || !this.on) return;
+    var t = this.ctx.currentTime, s = this.ctx.createBufferSource(), f = this.ctx.createBiquadFilter(), g = this.ctx.createGain();
+    s.buffer = this.noise; s.playbackRate.value = 1.4;
+    f.type = 'lowpass'; f.frequency.value = freq || 1600;
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(this.master);
+    s.start(t); s.stop(t + dur + 0.02);
+  },
+  move:   function () { this.tone('square', 320, 380, 0.04, 0.05); },
+  rotate: function () { this.tone('triangle', 520, 760, 0.07, 0.10); },
+  lock:   function () { this.tone('sine', 180, 90, 0.12, 0.18); this.hit(0.08, 0.10, 900); },
+  hold:   function () { this.tone('triangle', 700, 520, 0.09, 0.10); },
+  hard:   function () { this.tone('sawtooth', 300, 60, 0.16, 0.16); this.hit(0.14, 0.20, 1200); },
+  clear:  function (n) {
+    var base = 440 * Math.pow(2, Math.min(n, 4) / 6);
+    for (var i = 0; i < n + 2; i++) {
+      (function (self, k) {
+        setTimeout(function () { self.tone('triangle', base * Math.pow(1.26, k), base * Math.pow(1.26, k) * 1.5, 0.14, 0.14); }, k * 45);
+      })(this, i);
+    }
+    this.hit(0.3, 0.18, 2600);
+  },
+  level:  function () { for (var i = 0; i < 4; i++) { (function (self, k) { setTimeout(function () { self.tone('square', 440 * Math.pow(1.335, k), 440 * Math.pow(1.335, k), 0.12, 0.12); }, k * 70); })(this, i); } },
+  over:   function () { for (var i = 0; i < 5; i++) { (function (self, k) { setTimeout(function () { self.tone('sawtooth', 520 / Math.pow(1.22, k), 400 / Math.pow(1.22, k), 0.3, 0.14); }, k * 140); })(this, i); } }
+};
+
+function buzz(ms) { if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
+
+/* ---------------------------------------------------------- игра */
+var COLS = 10, ROWS = 20;
+var G = {
+  state: 'menu',           // menu | play | pause | over
+  grid: [], next: [], bag: [],
+  cur: null, hold: null, holdUsed: false,
+  score: 0, lines: 0, level: 1, combo: 0, tetrises: 0,
+  best: Number(store.get('tetra.best', 0)),
+  drop: 0, interval: 1000,
+  lockT: 0, lockResets: 0, soft: false,
+  t: 0, shake: 0, flashRows: [], parts: [], texts: [],
+  cell: 20, bx: 0, by: 0, bw: 0, bh: 0,
+  narrow: false, stripY: 0, barY: 0
+};
+
+function newGrid() {
+  var g = [], y, x;
+  for (y = 0; y < ROWS; y++) { g.push([]); for (x = 0; x < COLS; x++) g[y].push(-1); }
+  return g;
+}
+function refillBag() {
+  var b = TYPES.slice(), i, j, tmp;
+  for (i = b.length - 1; i > 0; i--) { j = (Math.random() * (i + 1)) | 0; tmp = b[i]; b[i] = b[j]; b[j] = tmp; }
+  G.bag = G.bag.concat(b);
+}
+function nextType() { while (G.bag.length < 8) refillBag(); return G.bag.shift(); }
+
+function makePiece(type) {
+  var x = type === 'O' ? 4 : type === 'I' ? 3 : 3;
+  return { type: type, rot: 0, x: x, y: type === 'I' ? -1 : 0 };
+}
+function collides(type, rot, px, py) {
+  var cells = SHAPES[type][rot], i, x, y;
+  for (i = 0; i < cells.length; i++) {
+    x = px + cells[i][0]; y = py + cells[i][1];
+    if (x < 0 || x >= COLS || y >= ROWS) return true;
+    if (y >= 0 && G.grid[y][x] !== -1) return true;
+  }
+  return false;
+}
+
+function reset() {
+  G.grid = newGrid(); G.bag = []; G.next = [];
+  for (var i = 0; i < 5; i++) G.next.push(nextType());
+  G.cur = null; G.hold = null; G.holdUsed = false;
+  G.score = 0; G.lines = 0; G.level = 1; G.combo = 0; G.tetrises = 0;
+  G.drop = 0; G.interval = 1000; G.lockT = 0; G.lockResets = 0; G.soft = false;
+  G.flashRows = []; G.parts = []; G.texts = []; G.shake = 0;
+  spawn();
+}
+function spawn() {
+  G.cur = makePiece(G.next.shift());
+  G.next.push(nextType());
+  G.drop = 0; G.lockT = 0; G.lockResets = 0; G.holdUsed = false;
+  if (collides(G.cur.type, G.cur.rot, G.cur.x, G.cur.y)) gameOver();
+}
+function dropInterval(level) {
+  var v = Math.pow(0.8 - (level - 1) * 0.007, level - 1) * 1000;
+  return Math.max(55, v);
+}
+
+function move(dx) {
+  if (!G.cur || G.state !== 'play') return false;
+  if (!collides(G.cur.type, G.cur.rot, G.cur.x + dx, G.cur.y)) {
+    G.cur.x += dx; touchLock(); SFX.move(); return true;
+  }
+  return false;
+}
+function stepDown(soft) {
+  if (!G.cur || G.state !== 'play') return false;
+  if (!collides(G.cur.type, G.cur.rot, G.cur.x, G.cur.y + 1)) {
+    G.cur.y++;
+    if (soft) G.score += 1;
+    G.drop = 0;
+    if (soft) G.lockT = 0;
+    return true;
+  }
+  return false;
+}
+function rotate(dir) {
+  if (!G.cur || G.state !== 'play') return false;
+  var from = G.cur.rot, to = (from + (dir > 0 ? 1 : 3)) % 4;
+  if (G.cur.type === 'O') return false;
+  var table = KICK[G.cur.type === 'I' ? 'I' : 'JLSTZ']['' + from + to] || [[0, 0]];
+  for (var i = 0; i < table.length; i++) {
+    var nx = G.cur.x + table[i][0], ny = G.cur.y + table[i][1];
+    if (!collides(G.cur.type, to, nx, ny)) {
+      G.cur.rot = to; G.cur.x = nx; G.cur.y = ny;
+      touchLock(); SFX.rotate(); buzz(8); return true;
+    }
+  }
+  return false;
+}
+function touchLock() {
+  if (G.lockT > 0 && G.lockResets < 15) { G.lockT = 0; G.lockResets++; }
+}
+function hardDrop() {
+  if (!G.cur || G.state !== 'play') return;
+  var n = 0;
+  while (!collides(G.cur.type, G.cur.rot, G.cur.x, G.cur.y + 1)) { G.cur.y++; n++; }
+  G.score += n * 2;
+  if (n > 0) { addTrail(n); }
+  SFX.hard(); buzz(18);
+  lock();
+}
+function holdPiece() {
+  if (!G.cur || G.state !== 'play' || G.holdUsed) return;
+  var cur = G.cur.type;
+  if (G.hold === null) { G.hold = cur; G.cur = null; spawn(); }
+  else { var h = G.hold; G.hold = cur; G.cur = makePiece(h); }
+  G.holdUsed = true; G.drop = 0; G.lockT = 0; G.lockResets = 0;
+  SFX.hold();
+  if (collides(G.cur.type, G.cur.rot, G.cur.x, G.cur.y)) gameOver();
+}
+function addTrail(n) {
+  var cells = SHAPES[G.cur.type][G.cur.rot];
+  for (var i = 0; i < cells.length; i++) {
+    var x = (G.cur.x + cells[i][0]) * G.cell + G.bx;
+    for (var k = 0; k < Math.min(n, 6); k++) {
+      spark(x + G.cell / 2, (G.cur.y + cells[i][1] - k) * G.cell + G.by + G.cell / 2, COLORS[COLOR_OF[G.cur.type]]);
+    }
+  }
+}
+function lock() {
+  var cells = SHAPES[G.cur.type][G.cur.rot], i, x, y, c = COLOR_OF[G.cur.type];
+  var top = ROWS;
+  for (i = 0; i < cells.length; i++) {
+    x = G.cur.x + cells[i][0]; y = G.cur.y + cells[i][1];
+    if (y < 0) { gameOver(); return; }
+    G.grid[y][x] = c;
+    if (y < top) top = y;
+    spark((x + 0.5) * G.cell + G.bx, (y + 0.5) * G.cell + G.by, COLORS[c]);
+  }
+  G.shake = Math.max(G.shake, 0.16);
+  SFX.lock();
+  clearLines();
+  G.cur = null;
+  spawn();
+}
+function clearLines() {
+  var full = [], y, x, ok;
+  for (y = 0; y < ROWS; y++) {
+    ok = true;
+    for (x = 0; x < COLS; x++) if (G.grid[y][x] === -1) { ok = false; break; }
+    if (ok) full.push(y);
+  }
+  if (!full.length) { G.combo = -1; return; }
+
+  var names = ['', 'ОДИН', 'ДВА', 'ТРИ', 'ТЕТРИС!'];
+  var pts = [0, 100, 300, 500, 800][full.length] * G.level;
+  G.combo++;
+  if (G.combo > 0) pts += 50 * G.combo * G.level;
+  G.score += pts;
+  G.lines += full.length;
+  if (full.length === 4) G.tetrises++;
+
+  for (var i = 0; i < full.length; i++) {
+    G.flashRows.push({ y: full[i], t: 0 });
+    for (x = 0; x < COLS; x++) {
+      for (var p = 0; p < 3; p++) {
+        spark((x + 0.5) * G.cell + G.bx, (full[i] + 0.5) * G.cell + G.by, COLORS[G.grid[full[i]][x]] || '#fff');
+      }
+    }
+    G.grid.splice(full[i], 1);
+    G.grid.unshift(newRow());
+    // ряды выше сдвинулись вниз на 1, но в списке полных остались только
+    // ряды ниже текущего — их индексы не меняются, поэтому править нечего
+  }
+
+  var label = names[Math.min(full.length, 4)];
+  G.texts.push({
+    x: G.bx + G.bw / 2, y: G.by + G.bh * 0.42, str: label,
+    size: Math.max(16, G.cell * 1.15), life: 0, ttl: 1.0,
+    color: full.length === 4 ? '#ffe14d' : '#35e6ff'
+  });
+  if (G.combo > 0) {
+    G.texts.push({ x: G.bx + G.bw / 2, y: G.by + G.bh * 0.42 + G.cell * 1.4, str: 'КОМБО ×' + (G.combo + 1),
+      size: Math.max(11, G.cell * 0.62), life: 0, ttl: 1.0, color: '#ff2fd0' });
+  }
+
+  G.shake = Math.max(G.shake, full.length === 4 ? 0.75 : 0.3);
+  SFX.clear(full.length);
+  buzz(full.length === 4 ? [30, 40, 60] : 20);
+
+  var newLevel = Math.floor(G.lines / 10) + 1;
+  if (newLevel > G.level) {
+    G.level = newLevel;
+    G.interval = dropInterval(G.level);
+    G.texts.push({ x: G.bx + G.bw / 2, y: G.by + G.bh * 0.3, str: 'УРОВЕНЬ ' + G.level,
+      size: Math.max(13, G.cell * 0.8), life: 0, ttl: 1.2, color: '#4dffb0' });
+    SFX.level();
+  }
+}
+function newRow() { var r = [], x; for (x = 0; x < COLS; x++) r.push(-1); return r; }
+
+function spark(x, y, color) {
+  if (G.parts.length > 420) return;
+  var a = Math.random() * Math.PI * 2, sp = 40 + Math.random() * 260;
+  G.parts.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 60, life: 0, ttl: 0.35 + Math.random() * 0.5, color: color, size: 1.5 + Math.random() * 2.5 });
+}
+
+function gameOver() {
+  if (G.state === 'over') return;
+  G.state = 'over';
+  SFX.over();
+  G.shake = 1;
+  for (var y = 0; y < ROWS; y++) for (var x = 0; x < COLS; x++) {
+    if (G.grid[y][x] !== -1 && Math.random() < 0.35) {
+      spark((x + 0.5) * G.cell + G.bx, (y + 0.5) * G.cell + G.by, COLORS[G.grid[y][x]]);
+    }
+  }
+  var rec = G.score > G.best;
+  if (rec) { G.best = G.score; store.set('tetra.best', G.best); }
+  setTimeout(function () {
+    $('final').textContent = fmt(G.score);
+    $('best-over').textContent = fmt(G.best);
+    $('lines').textContent = G.lines;
+    $('lvl').textContent = G.level;
+    $('tetris').textContent = G.tetrises;
+    $('record').classList.toggle('hidden', !rec);
+    $('over').classList.remove('hidden');
+    $('best-menu').textContent = fmt(G.best);
+  }, 700);
+}
+
+/* ---------------------------------------------------------- раскладка */
+var W = 0, H = 0, DPR = 1;
+function layout() {
+  var wrap = $('wrap');
+  W = Math.max(200, wrap.clientWidth || window.innerWidth);
+  H = Math.max(240, wrap.clientHeight || window.innerHeight);
+  DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+  var pad = 8, gap = 8;
+  // узкий экран (телефон): панели — полоса сверху и строка снизу,
+  // широкий: панели слева и справа от стакана
+  G.narrow = W < 560;
+  var cell;
+  if (G.narrow) cell = Math.min((H - pad * 2 - gap * 2) / (ROWS + 4.0), (W - pad * 2) / COLS);
+  else cell = Math.min((H - pad * 2) / ROWS, (W - pad * 4) / (COLS + 9));
+
+  G.cell = Math.max(9, Math.floor(cell));
+  G.bw = G.cell * COLS; G.bh = G.cell * ROWS;
+  G.bx = Math.round((W - G.bw) / 2);
+
+  if (G.narrow) {
+    var stripH = G.cell * 2.6, barH = G.cell * 1.5;
+    var total = stripH + gap + G.bh + gap + barH;
+    var top = Math.round((H - total) / 2);
+    G.stripY = top;
+    G.by = top + stripH + gap;
+    G.barY = G.by + G.bh + gap;
+  } else {
+    G.by = Math.round((H - G.bh) / 2);
+    G.stripY = G.by; G.barY = G.by + G.bh;
+  }
+}
+window.addEventListener('resize', layout);
+window.addEventListener('orientationchange', function () { setTimeout(layout, 200); });
+
+/* ---------------------------------------------------------- отрисовка */
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function block(x, y, s, color, alpha) {
+  ctx.globalAlpha = alpha === undefined ? 1 : alpha;
+  var g = ctx.createLinearGradient(x, y, x, y + s);
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(0.22, color);
+  g.addColorStop(1, 'rgba(10,5,30,0.92)');
+  ctx.fillStyle = g;
+  roundRect(x + 1, y + 1, s - 2, s - 2, Math.max(2, s * 0.16));
+  ctx.fill();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(1, s * 0.055);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+function ghostBlock(x, y, s, color) {
+  ctx.globalAlpha = 0.30;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(1, s * 0.07);
+  roundRect(x + 2, y + 2, s - 4, s - 4, Math.max(2, s * 0.16));
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+function glowRect(x, y, w, h, color, a) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = a;
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, w, h);
+  ctx.restore();
+}
+
+function draw() {
+  var c = G.cell, i, x, y;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  // фон
+  var bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#170a35'); bg.addColorStop(0.5, '#090519'); bg.addColorStop(1, '#04020c');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+  ctx.save();
+  if (G.shake > 0) {
+    var m = G.shake * G.shake * 16;
+    ctx.translate((Math.random() - 0.5) * m, (Math.random() - 0.5) * m);
+  }
+
+  /* ---- поле ---- */
+  ctx.fillStyle = 'rgba(8,4,22,0.85)';
+  roundRect(G.bx - 4, G.by - 4, G.bw + 8, G.bh + 8, 8);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(120,90,220,0.45)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.save();
+  ctx.beginPath(); ctx.rect(G.bx, G.by, G.bw, G.bh); ctx.clip();
+  ctx.strokeStyle = 'rgba(120,90,220,0.13)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (x = 1; x < COLS; x++) { ctx.moveTo(G.bx + x * c, G.by); ctx.lineTo(G.bx + x * c, G.by + G.bh); }
+  for (y = 1; y < ROWS; y++) { ctx.moveTo(G.bx, G.by + y * c); ctx.lineTo(G.bx + G.bw, G.by + y * c); }
+  ctx.stroke();
+
+  // лежащие блоки
+  for (y = 0; y < ROWS; y++) for (x = 0; x < COLS; x++) {
+    if (G.grid[y][x] !== -1) block(G.bx + x * c, G.by + y * c, c, COLORS[G.grid[y][x]]);
+  }
+
+  // призрак и активная фигура
+  if (G.cur && G.state === 'play') {
+    var gy = G.cur.y;
+    while (!collides(G.cur.type, G.cur.rot, G.cur.x, gy + 1)) gy++;
+    var cells = SHAPES[G.cur.type][G.cur.rot];
+    for (i = 0; i < cells.length; i++) {
+      var gx = G.bx + (G.cur.x + cells[i][0]) * c;
+      var yy = G.by + (gy + cells[i][1]) * c;
+      if (gy + cells[i][1] >= 0 && gy !== G.cur.y) ghostBlock(gx, yy, c, COLORS[COLOR_OF[G.cur.type]]);
+    }
+    for (i = 0; i < cells.length; i++) {
+      var px = G.bx + (G.cur.x + cells[i][0]) * c;
+      var py = G.by + (G.cur.y + cells[i][1]) * c;
+      if (G.cur.y + cells[i][1] >= 0) {
+        block(px, py, c, COLORS[COLOR_OF[G.cur.type]]);
+        glowRect(px + 2, py + 2, c - 4, c - 4, COLORS[COLOR_OF[G.cur.type]], 0.16);
+      }
+    }
+  }
+
+  // вспышки линий
+  for (i = 0; i < G.flashRows.length; i++) {
+    var f = G.flashRows[i], k = f.t / 0.32;
+    glowRect(G.bx, G.by + f.y * c, G.bw, c, '#ffffff', (1 - k) * 0.85);
+  }
+  ctx.restore();
+
+  /* ---- панели ---- */
+  if (G.narrow) { drawStrip(); drawBar(); } else { drawSides(); }
+
+  /* ---- частицы ---- */
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (i = 0; i < G.parts.length; i++) {
+    var p = G.parts[i], a = 1 - p.life / p.ttl;
+    ctx.globalAlpha = a;
+    ctx.strokeStyle = p.color;
+    ctx.lineWidth = p.size * a;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x - p.vx * 0.012, p.y - p.vy * 0.012);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  /* ---- текст ---- */
+  for (i = 0; i < G.texts.length; i++) {
+    var t = G.texts[i], kk = t.life / t.ttl;
+    ctx.globalAlpha = kk < 0.12 ? kk / 0.12 : 1 - (kk - 0.12) / 0.88;
+    ctx.font = '800 ' + t.size + 'px "Segoe UI", system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.shadowColor = t.color; ctx.shadowBlur = 16;
+    ctx.fillStyle = '#fff';
+    ctx.fillText(t.str, t.x, t.y - kk * c * 1.6);
+    ctx.shadowBlur = 0;
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+function drawPanel(x, y, w, title, type, mode, h) {
+  var c = G.cell;
+  if (h === undefined) h = mode === 1 ? c * 4.2 : 30 + 5 * c * 2.6 + 8;
+  ctx.fillStyle = 'rgba(255,255,255,0.04)';
+  roundRect(x, y, w, h, 8);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(120,90,220,0.3)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = '#7c8aa8';
+  ctx.font = '700 ' + Math.max(8, c * 0.44) + 'px "Segoe UI", system-ui, sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(title, x + 7, y + 7);
+  if (mode === 1 && type) drawMini(type, x + w / 2, y + 30 + c * 1.1, c * 0.72, G.holdUsed ? 0.35 : 1);
+}
+
+function drawMini(type, cx, cy, s, alpha) {
+  var cells = SHAPES[type][0], i, minX = 9, maxX = -9, minY = 9, maxY = -9;
+  for (i = 0; i < cells.length; i++) {
+    minX = Math.min(minX, cells[i][0]); maxX = Math.max(maxX, cells[i][0]);
+    minY = Math.min(minY, cells[i][1]); maxY = Math.max(maxY, cells[i][1]);
+  }
+  var w = (maxX - minX + 1) * s, h = (maxY - minY + 1) * s;
+  var ox = cx - w / 2 - minX * s, oy = cy - h / 2 - minY * s;
+  ctx.globalAlpha = alpha;
+  for (i = 0; i < cells.length; i++) block(ox + cells[i][0] * s, oy + cells[i][1] * s, s, COLORS[COLOR_OF[type]]);
+  ctx.globalAlpha = 1;
+}
+
+var F = function (size, weight) { return (weight || '800') + ' ' + Math.max(6, size) + 'px "Segoe UI", system-ui, sans-serif'; };
+function box(x, y, w, h) {
+  ctx.fillStyle = 'rgba(255,255,255,0.04)';
+  roundRect(x, y, w, h, 8); ctx.fill();
+  ctx.strokeStyle = 'rgba(120,90,220,0.3)'; ctx.lineWidth = 1; ctx.stroke();
+}
+function label(text, x, y, size) {
+  ctx.font = F(size, '700');
+  ctx.fillStyle = '#7c8aa8';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(text, x, y);
+}
+
+/* широкий экран: панели по бокам от стакана */
+function drawSides() {
+  var c = G.cell, lw = c * 4.2 - 6;
+  drawPanel(G.bx - 4 - c * 4.2, G.by, lw, 'ОТЛОЖ.', G.hold === null ? null : G.hold, 1);
+  var nh = 26 + c * 1.1 + 4 * c * 2.6 + c * 1.1 + 8;
+  drawPanel(G.bx + G.bw + 10, G.by, lw, 'ДАЛЕЕ', null, 0, nh);
+  for (var i = 0; i < Math.min(5, G.next.length); i++) {
+    drawMini(G.next[i], G.bx + G.bw + 10 + lw / 2, G.by + 26 + c * 1.1 + i * c * 2.6, c * 0.62, i === 0 ? 1 : 0.62);
+  }
+  drawStats(G.bx - 4 - c * 4.2, G.by + c * 4.4, lw);
+}
+
+/* узкий экран: полоса «отложить | далее» над стаканом */
+function drawStrip() {
+  var c = G.cell, h = c * 2.6, y = G.stripY, hw = c * 2.6;
+  box(G.bx, y, hw, h);
+  label('ОТЛОЖ.', G.bx + 6, y + 5, c * 0.4);
+  if (G.hold !== null) drawMini(G.hold, G.bx + hw / 2, y + h / 2 + c * 0.3, c * 0.5, G.holdUsed ? 0.3 : 1);
+
+  var nw = c * 2.15, n = Math.min(3, G.next.length), x0 = G.bx + G.bw - n * nw;
+  box(x0, y, n * nw, h);
+  label('ДАЛЕЕ', x0 + 6, y + 5, c * 0.4);
+  for (var i = 0; i < n; i++) {
+    drawMini(G.next[i], x0 + i * nw + nw / 2, y + h / 2 + c * 0.3, c * (i === 0 ? 0.56 : 0.42), i === 0 ? 1 : 0.5);
+  }
+}
+
+/* узкий экран: строка со счётом под стаканом */
+function drawBar() {
+  var c = G.cell, y = G.barY, h = c * 1.5;
+  box(G.bx, y, G.bw, h);
+  ctx.textBaseline = 'middle';
+  var small = Math.max(7, c * 0.36), big = Math.max(11, c * 0.66);
+
+  ctx.textAlign = 'left';
+  ctx.font = F(small, '700'); ctx.fillStyle = '#7c8aa8'; ctx.fillText('СЧЁТ', G.bx + 9, y + h * 0.28);
+  ctx.font = F(big); ctx.fillStyle = '#fff'; ctx.fillText(fmt(G.score), G.bx + 9, y + h * 0.72);
+
+  ctx.textAlign = 'center';
+  ctx.font = F(small, '700'); ctx.fillStyle = '#7c8aa8'; ctx.fillText('ЛИНИИ', G.bx + G.bw / 2, y + h * 0.28);
+  ctx.font = F(big); ctx.fillStyle = '#35e6ff'; ctx.fillText(String(G.lines), G.bx + G.bw / 2, y + h * 0.72);
+
+  ctx.textAlign = 'right';
+  ctx.font = F(small, '700'); ctx.fillStyle = '#7c8aa8';
+  ctx.fillText(G.combo > 0 ? 'КОМБО ' + G.combo : 'УРОВЕНЬ', G.bx + G.bw - 9, y + h * 0.28);
+  ctx.font = F(big); ctx.fillStyle = G.combo > 0 ? '#ff2fd0' : '#4dffb0';
+  ctx.fillText(String(G.combo > 0 ? G.combo : G.level), G.bx + G.bw - 9, y + h * 0.72);
+}
+
+function drawStats(x, y, w) {
+  var c = G.cell, rows = [['СЧЁТ', fmt(G.score), '#fff'], ['ЛИНИИ', G.lines, '#35e6ff'], ['УРОВЕНЬ', G.level, '#4dffb0']];
+  var fs = Math.max(9, c * 0.52);
+  for (var i = 0; i < rows.length; i++) {
+    var yy = y + i * (fs * 2.5);
+    ctx.font = '700 ' + Math.max(7, c * 0.38) + 'px "Segoe UI", system-ui, sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillStyle = '#7c8aa8';
+    ctx.fillText(rows[i][0], x + 6, yy);
+    ctx.font = '800 ' + fs * 1.5 + 'px "Segoe UI", system-ui, sans-serif';
+    ctx.fillStyle = rows[i][2];
+    ctx.fillText(String(rows[i][1]), x + 6, yy + fs * 1.05);
+  }
+  if (G.combo > 0) {
+    ctx.font = '800 ' + Math.max(9, c * 0.5) + 'px "Segoe UI", system-ui, sans-serif';
+    ctx.fillStyle = '#ff2fd0';
+    ctx.fillText('КОМБО ' + G.combo, x + 6, y + 3 * (fs * 2.5) + 4);
+  }
+}
+
+function fmt(n) { return Math.floor(n).toLocaleString('ru-RU'); }
+
+/* ---------------------------------------------------------- цикл */
+function update(dt) {
+  G.t += dt;
+  // частицы
+  for (var i = G.parts.length - 1; i >= 0; i--) {
+    var p = G.parts[i];
+    p.life += dt;
+    if (p.life >= p.ttl) { G.parts.splice(i, 1); continue; }
+    p.vy += 620 * dt;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+  }
+  for (i = G.texts.length - 1; i >= 0; i--) {
+    G.texts[i].life += dt;
+    if (G.texts[i].life >= G.texts[i].ttl) G.texts.splice(i, 1);
+  }
+  for (i = G.flashRows.length - 1; i >= 0; i--) {
+    G.flashRows[i].t += dt;
+    if (G.flashRows[i].t > 0.32) G.flashRows.splice(i, 1);
+  }
+  G.shake = Math.max(0, G.shake - dt * 2.4);
+
+  if (G.state !== 'play' || !G.cur) return;
+
+  var interval = G.soft ? Math.max(28, G.interval / 14) : G.interval;
+  G.drop += dt * 1000;
+  while (G.drop >= interval) {
+    G.drop -= interval;
+    if (!stepDown(G.soft)) break;
+  }
+
+  // фиксация
+  if (collides(G.cur.type, G.cur.rot, G.cur.x, G.cur.y + 1)) {
+    G.lockT += dt;
+    var limit = G.soft ? 0.08 : 0.5;
+    if (G.lockT >= limit) lock();
+  } else {
+    G.lockT = 0;
+  }
+}
+
+var last = 0;
+function frame(now) {
+  if (!last) last = now;
+  var dt = Math.min((now - last) / 1000, 0.1);
+  last = now;
+  if (G.state === 'play') update(dt);
+  else { G.t += dt; for (var i = G.parts.length - 1; i >= 0; i--) { var p = G.parts[i]; p.life += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 620 * dt; if (p.life >= p.ttl) G.parts.splice(i, 1); } G.shake = Math.max(0, G.shake - dt * 2.4); }
+  draw();
+  requestAnimationFrame(frame);
+}
+
+/* ---------------------------------------------------------- ввод */
+var held = {};
+function press(act) {
+  if (G.state !== 'play') return;
+  if (act === 'left') move(-1);
+  else if (act === 'right') move(1);
+  else if (act === 'rot') rotate(1);
+  else if (act === 'ccw') rotate(-1);
+  else if (act === 'down') { G.soft = true; stepDown(true); }
+  else if (act === 'drop') hardDrop();
+  else if (act === 'hold') holdPiece();
+}
+function release(act) { if (act === 'down') G.soft = false; }
+
+document.addEventListener('keydown', function (e) {
+  var k = e.key;
+  if (k === 'Enter') {
+    if (G.state === 'menu') start();
+    else if (G.state === 'over') start();
+    return;
+  }
+  if (k === 'p' || k === 'P' || k === 'Escape') { togglePause(); return; }
+  if (G.state !== 'play') return;
+  if (k === 'ArrowLeft') { if (!held.left) { held.left = 1; press('left'); } e.preventDefault(); }
+  else if (k === 'ArrowRight') { if (!held.right) { held.right = 1; press('right'); } e.preventDefault(); }
+  else if (k === 'ArrowDown') { if (!held.down) { held.down = 1; press('down'); } e.preventDefault(); }
+  else if (k === 'ArrowUp' || k === 'x' || k === 'X' || k === 'ч' || k === 'Ч') { if (!held.rot) { held.rot = 1; press('rot'); } e.preventDefault(); }
+  else if (k === 'z' || k === 'Z' || k === 'я' || k === 'Я') { if (!held.ccw) { held.ccw = 1; press('ccw'); } e.preventDefault(); }
+  else if (k === 'c' || k === 'C' || k === 'с' || k === 'С' || k === 'Shift') { if (!held.hold) { held.hold = 1; press('hold'); } e.preventDefault(); }
+  else if (k === ' ') { if (!held.drop) { held.drop = 1; press('drop'); } e.preventDefault(); }
+});
+document.addEventListener('keyup', function (e) {
+  var k = e.key;
+  if (k === 'ArrowLeft') { held.left = 0; }
+  else if (k === 'ArrowRight') { held.right = 0; }
+  else if (k === 'ArrowDown') { held.down = 0; release('down'); }
+  else if (k === 'ArrowUp' || k === 'x' || k === 'X') { held.rot = 0; }
+  else if (k === 'z' || k === 'Z') { held.ccw = 0; }
+  else if (k === 'c' || k === 'C' || k === 'Shift') { held.hold = 0; }
+  else if (k === ' ') { held.drop = 0; }
+});
+
+/* повтор при удержании кнопок на экране */
+var REPEAT = { left: 1, right: 1, down: 1 };
+var timers = {};
+document.querySelectorAll('#pad .pb').forEach(function (b) {
+  var act = b.getAttribute('data-act');
+  b.addEventListener('pointerdown', function (e) {
+    e.preventDefault(); e.stopPropagation();
+    press(act);
+    if (REPEAT[act]) {
+      clearTimeout(timers[act]);
+      timers[act] = setTimeout(function () {
+        timers[act] = setInterval(function () { press(act); }, 55);
+      }, 180);
+    }
+  });
+  var stop = function (e) { e.preventDefault(); clearTimeout(timers[act]); clearInterval(timers[act]); release(act); };
+  b.addEventListener('pointerup', stop);
+  b.addEventListener('pointercancel', stop);
+  b.addEventListener('pointerleave', stop);
+});
+
+/* свайпы по полю */
+(function () {
+  var sx = 0, sy = 0, st = 0, moved = 0;
+  cv.addEventListener('pointerdown', function (e) {
+    sx = e.clientX; sy = e.clientY; st = Date.now(); moved = 0;
+  });
+  cv.addEventListener('pointermove', function (e) {
+    if (G.state !== 'play') return;
+    var dx = e.clientX - sx;
+    while (Math.abs(dx) >= G.cell * 0.9) {
+      var dir = dx > 0 ? 1 : -1;
+      move(dir);
+      dx -= dir * G.cell * 0.9;
+      sx += dir * G.cell * 0.9;
+      moved += G.cell * 0.9;
+    }
+    var dy = e.clientY - sy;
+    if (dy > G.cell * 2.2) { G.soft = true; stepDown(true); sy = e.clientY; }
+  });
+  cv.addEventListener('pointerup', function (e) {
+    G.soft = false;
+    var dx = e.clientX - sx, dy = e.clientY - sy, dt = Date.now() - st;
+    if (Math.abs(dx) < 12 && Math.abs(dy) < 12 && dt < 260) rotate(1);
+    else if (dy < -G.cell * 2.2) holdPiece();
+    else if (dy > G.cell * 3) hardDrop();
+  });
+  cv.addEventListener('pointercancel', function () { G.soft = false; });
+})();
+
+document.addEventListener('touchmove', function (e) { if (e.cancelable) e.preventDefault(); }, { passive: false });
+document.addEventListener('dblclick', function (e) { e.preventDefault(); });
+document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+
+/* ---------------------------------------------------------- экраны */
+function start() {
+  SFX.init();
+  reset();
+  G.state = 'play';
+  $('menu').classList.add('hidden');
+  $('over').classList.add('hidden');
+  $('pauseScreen').classList.add('hidden');
+  last = 0;
+}
+function toMenu() {
+  G.state = 'menu';
+  $('over').classList.add('hidden');
+  $('pauseScreen').classList.add('hidden');
+  $('menu').classList.remove('hidden');
+}
+function togglePause() {
+  if (G.state === 'play') { G.state = 'pause'; $('pauseScreen').classList.remove('hidden'); }
+  else if (G.state === 'pause') { G.state = 'play'; $('pauseScreen').classList.add('hidden'); last = 0; }
+}
+document.addEventListener('visibilitychange', function () { if (document.hidden && G.state === 'play') togglePause(); });
+window.addEventListener('blur', function () { if (G.state === 'play') togglePause(); });
+
+$('play').addEventListener('click', start);
+$('retry').addEventListener('click', start);
+$('home').addEventListener('click', toMenu);
+$('resume').addEventListener('click', togglePause);
+$('pauseScreen').addEventListener('click', function (e) { if (e.target === $('pauseScreen')) togglePause(); });
+$('pause').addEventListener('click', function (e) { e.stopPropagation(); togglePause(); });
+$('sound').addEventListener('click', function (e) {
+  e.stopPropagation();
+  SFX.init();
+  SFX.set(!SFX.on);
+  $('sound').textContent = SFX.on ? '🔊' : '🔇';
+  $('sound').classList.toggle('off', !SFX.on);
+});
+
+/* показываем сенсорные кнопки на тач-устройствах */
+if (('ontouchstart' in window) || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)) {
+  $('pad').classList.add('on');
+}
+$('sound').textContent = SFX.on ? '🔊' : '🔇';
+$('sound').classList.toggle('off', !SFX.on);
+$('best-menu').textContent = fmt(G.best);
+
+/* ---------------------------------------------------------- старт */
+layout();
+reset();
+G.state = 'menu';
+requestAnimationFrame(frame);
+
+/* доступ из консоли / для автотестов */
+window.TETRA = { G: G, start: start, collides: collides, SHAPES: SHAPES, press: press, rotate: rotate, hardDrop: hardDrop, lock: lock, clearLines: clearLines };
+})();
+</script>
+</body>
+</html>
